@@ -1,0 +1,105 @@
+{% extends 'flights/base.html' %}
+{% load flight_extras %}
+
+{% block title %}Book Flight {{ flight.flight_number }} — SkyWay Airlines{% endblock %}
+
+{% block content %}
+<div class="booking-container">
+    <div class="page-header">
+        <h1>Book Your Flight</h1>
+        <p>{{ flight.origin.city }} → {{ flight.destination.city }}</p>
+    </div>
+
+    <!-- Flight Summary -->
+    <div class="booking-summary glass-card">
+        <div class="flight-header">
+            <div class="airline-info">
+                <div class="airline-icon">✈</div>
+                <div>
+                    <div class="airline-name">{{ flight.airline }}</div>
+                    <div class="flight-number">{{ flight.flight_number }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="flight-route">
+            <div class="route-point">
+                <div class="time">{{ flight.departure_time|time:"H:i" }}</div>
+                <div class="code">{{ flight.origin.code }}</div>
+                <div class="city">{{ flight.origin.city }}</div>
+            </div>
+            <div class="route-line">
+                <div class="duration">{{ flight.duration }}</div>
+                <div class="line"></div>
+                <div class="stops">{{ flight.departure_time|date:"d M Y" }}</div>
+            </div>
+            <div class="route-point">
+                <div class="time">{{ flight.arrival_time|time:"H:i" }}</div>
+                <div class="code">{{ flight.destination.code }}</div>
+                <div class="city">{{ flight.destination.city }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Booking Form -->
+    <div class="booking-form-card glass-card">
+        <form method="POST" id="booking-form">
+            {% csrf_token %}
+
+            <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">Select Seat Class</h3>
+
+            <div class="seat-class-options">
+                <div class="seat-option">
+                    <input type="radio" name="seat_class" value="economy" id="seat-economy" checked>
+                    <label for="seat-economy" class="seat-option-label">
+                        <span class="class-name">Economy</span>
+                        <span class="class-price">₹{{ flight.economy_price|floatformat:0 }}</span>
+                        <span class="class-seats">{{ flight.economy_seats_available }} seats available</span>
+                    </label>
+                </div>
+                <div class="seat-option">
+                    <input type="radio" name="seat_class" value="business" id="seat-business">
+                    <label for="seat-business" class="seat-option-label">
+                        <span class="class-name">Business</span>
+                        <span class="class-price">₹{{ flight.business_price|floatformat:0 }}</span>
+                        <span class="class-seats">{{ flight.business_seats_available }} seats available</span>
+                    </label>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">Passenger Details ({{ passengers }} passenger{{ passengers|pluralize }})</h3>
+
+            <div class="passenger-fields">
+                {% for field_name, field in form.fields.items %}
+                    {% if field_name != 'seat_class' %}
+                    <div class="form-group">
+                        <label for="passenger-name-{{ forloop.counter }}">{{ field.label }}</label>
+                        {{ field.widget }}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+
+                {% for i in "x"|ljust:passengers %}
+                <div class="form-group">
+                    <label for="passenger-name-{{ forloop.counter }}">Passenger {{ forloop.counter }} Full Name</label>
+                    <input type="text" name="passenger_{{ forloop.counter }}" class="form-input" placeholder="Enter passenger {{ forloop.counter }} name" id="passenger-name-{{ forloop.counter }}" required>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if form.errors %}
+            <div class="form-errors">
+                {% for field, errors in form.errors.items %}
+                    {% for error in errors %}
+                    <p class="field-error">{{ error }}</p>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <button type="submit" class="btn btn-primary btn-block" id="confirm-booking-btn" style="padding: 14px; font-size: 1.05rem;">
+                Confirm Booking
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

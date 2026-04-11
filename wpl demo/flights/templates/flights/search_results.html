@@ -1,0 +1,118 @@
+{% extends 'flights/base.html' %}
+{% load flight_extras %}
+
+{% block title %}Search Results — SkyWay Airlines{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Search Form -->
+    <div class="search-box" style="margin-bottom: 2rem;">
+        <h2>Search Flights</h2>
+        <form method="GET" action="{% url 'search_flights' %}">
+            <div class="search-grid">
+                <div class="form-group">
+                    <label for="search-origin">From</label>
+                    {{ form.origin }}
+                </div>
+                <div class="form-group">
+                    <label for="search-destination">To</label>
+                    {{ form.destination }}
+                </div>
+                <div class="form-group">
+                    <label for="search-date">Date</label>
+                    {{ form.date }}
+                </div>
+                <div class="form-group">
+                    <label for="search-passengers">Passengers</label>
+                    {{ form.passengers }}
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 1.5rem;">
+                <button type="submit" class="btn btn-primary" id="search-submit-btn">
+                    Search Flights
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if origin and destination %}
+    <div class="page-header">
+        <h1>{{ origin.city }} → {{ destination.city }}</h1>
+        <p>{{ date|date:"l, d F Y" }} • {{ passengers }} Passenger{{ passengers|pluralize }}</p>
+    </div>
+
+    {% if flights %}
+    <div class="bookings-list">
+        {% for flight in flights %}
+        <div class="flight-card glass-card">
+            <!-- Flight Header -->
+            <div class="flight-header">
+                <div class="airline-info">
+                    <div class="airline-icon">✈</div>
+                    <div>
+                        <div class="airline-name">{{ flight.airline }}</div>
+                        <div class="flight-number">{{ flight.flight_number }}</div>
+                    </div>
+                </div>
+                <div class="booking-status status-confirmed">
+                    Available
+                </div>
+            </div>
+
+            <!-- Flight Route -->
+            <div class="flight-route">
+                <div class="route-point">
+                    <div class="time">{{ flight.departure_time|time:"H:i" }}</div>
+                    <div class="code">{{ flight.origin.code }}</div>
+                    <div class="city">{{ flight.origin.city }}</div>
+                </div>
+                <div class="route-line">
+                    <div class="duration">{{ flight.duration }}</div>
+                    <div class="line"></div>
+                    <div class="stops">Non-stop</div>
+                </div>
+                <div class="route-point">
+                    <div class="time">{{ flight.arrival_time|time:"H:i" }}</div>
+                    <div class="code">{{ flight.destination.code }}</div>
+                    <div class="city">{{ flight.destination.city }}</div>
+                </div>
+            </div>
+
+            <!-- Flight Footer -->
+            <div class="flight-footer">
+                <div class="price-section">
+                    <div class="price-item">
+                        <div class="label">Economy</div>
+                        <div class="price">₹{{ flight.economy_price|floatformat:0 }}</div>
+                        <div class="seats">{{ flight.economy_seats_available }} seats left</div>
+                    </div>
+                    <div class="price-item">
+                        <div class="label">Business</div>
+                        <div class="price">₹{{ flight.business_price|floatformat:0 }}</div>
+                        <div class="seats">{{ flight.business_seats_available }} seats left</div>
+                    </div>
+                </div>
+                <a href="{% url 'book_flight' flight.id %}?passengers={{ passengers }}" class="btn btn-primary" id="book-flight-{{ flight.id }}">
+                    Book Now →
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state glass-card">
+        <div class="icon">--</div>
+        <h3>No flights found</h3>
+        <p>We couldn't find any flights for this route and date. Try a different date or route.</p>
+        <a href="{% url 'home' %}" class="btn btn-outline">← Back to Home</a>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="page-header">
+        <h1>Search Flights</h1>
+        <p>Use the search form above to find available flights</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
