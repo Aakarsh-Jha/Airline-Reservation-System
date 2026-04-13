@@ -1,0 +1,73 @@
+{% extends 'flights/base.html' %}
+{% load flight_extras %}
+
+{% block title %}Booking Confirmed — Manipal Airlines{% endblock %}
+
+{% block content %}
+<div class="confirmation-container">
+    <div class="confirm-icon">✓</div>
+
+    <div class="confirm-card glass-card">
+        <h1>Booking Confirmed!</h1>
+        <div class="ref-number">{{ booking.booking_reference }}</div>
+
+        <div class="detail-grid">
+            <div class="detail-item">
+                <div class="label">Flight</div>
+                <div class="value">{{ booking.flight.flight_number }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="label">Airline</div>
+                <div class="value">{{ booking.flight.airline }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="label">From</div>
+                <div class="value">{{ booking.flight.origin.city }} ({{ booking.flight.origin.code }})</div>
+            </div>
+            <div class="detail-item">
+                <div class="label">To</div>
+                <div class="value">{{ booking.flight.destination.city }} ({{ booking.flight.destination.code }})</div>
+            </div>
+            <div class="detail-item">
+                <div class="label">Departure</div>
+                <div class="value">{{ booking.flight.departure_time|date:"d M Y, H:i" }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="label">Arrival</div>
+                <div class="value">{{ booking.flight.arrival_time|date:"d M Y, H:i" }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="label">Class</div>
+                <div class="value" style="text-transform: capitalize;">{{ booking.seat_class }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="label">Passengers</div>
+                <div class="value">{{ booking.num_passengers }}</div>
+            </div>
+        </div>
+
+        {% with names=booking.get_passenger_names %}
+        {% if names %}
+        <div class="detail-item" style="margin-bottom: 1.5rem;">
+            <div class="label">Passenger Names</div>
+            <div class="value">
+                {% for name in names %}
+                    {{ name }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="detail-item" style="margin-bottom: 2rem; text-align: center; padding: 1.2rem;">
+            <div class="label">Total Price</div>
+            <div class="value" style="font-size: 1.5rem; color: var(--navy); font-weight: 700;">₹{{ booking.total_price|floatformat:0 }}</div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+            <a href="{% url 'my_bookings' %}" class="btn btn-primary" id="view-bookings-btn">View My Bookings</a>
+            <a href="{% url 'home' %}" class="btn btn-outline" id="book-another-btn">Book Another Flight</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
