@@ -83,5 +83,4 @@
    Open your preferred web browser and navigate to:
    **[http://127.0.0.1:8000/](http://127.0.0.1:8000/)**
 
-## 👥 Author
-Developed for the **Web Programming Lab Mini-Project**.
+
