@@ -1,0 +1,632 @@
+{% extends 'flights/base.html' %}
+{% load flight_extras %}
+
+{% block title %}Book Flight {{ flight.flight_number }} — Manipal Airlines{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    .map-marker-label {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 3px 7px;
+        font-family: var(--font-body);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+    .marker-origin { border-color: var(--accent); color: var(--accent); }
+    .marker-destination { border-color: #4a8b5c; color: #4a8b5c; }
+    .marker-stop { border-color: #c9952c; color: #c9952c; }
+
+    /* Price Predictor */
+    .price-predictor {
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .predictor-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.2rem;
+        flex-wrap: wrap;
+        gap: 0.8rem;
+    }
+    .predictor-header h3 {
+        font-size: 1.1rem;
+    }
+    .rec-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+    .rec-badge .rec-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        animation: pulse-dot 1.5s infinite;
+    }
+    @keyframes pulse-dot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.3); }
+    }
+    .price-chart-container {
+        position: relative;
+        height: 200px;
+        margin-bottom: 1rem;
+    }
+    .rec-detail {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        padding: 0.8rem 1rem;
+        border-radius: 8px;
+        background: var(--bg-primary);
+        border-left: 3px solid;
+    }
+    .trend-info {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 0.8rem;
+        flex-wrap: wrap;
+    }
+    .trend-stat {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+    .trend-stat strong {
+        font-size: 0.95rem;
+    }
+    
+    /* Seat Map */
+    .seat-map-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin: 2rem 0;
+        padding: 2rem;
+        background: var(--bg-primary);
+        border-radius: 20px;
+        border: 1px solid var(--border);
+    }
+    .plane-fuselage {
+        background: var(--bg-card);
+        padding: 3rem 2rem;
+        border-radius: 50% 50% 10px 10px / 15% 15% 5% 5%;
+        border: 2px solid var(--border);
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.05);
+        width: 100%;
+        max-width: 320px;
+        position: relative;
+    }
+    .seat-row {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .seat-row[data-class="business"] {
+        gap: 15px;
+        margin-bottom: 12px;
+    }
+    .aisle {
+        width: 25px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        font-weight: bold;
+    }
+    .seat {
+        width: 32px;
+        height: 38px;
+        border-radius: 6px 6px 4px 4px;
+        background: var(--bg-secondary);
+        border: 2px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+    }
+    .seat::after {
+        content: '';
+        position: absolute;
+        bottom: 4px;
+        left: 20%;
+        width: 60%;
+        height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+        transition: all 0.2s;
+    }
+    .seat:hover:not(.booked) {
+        border-color: var(--accent);
+        background: var(--accent-hover);
+        color: var(--accent);
+        transform: translateY(-2px);
+    }
+    .seat.selected {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--bg-primary);
+    }
+    .seat.selected::after {
+        background: var(--bg-primary);
+        opacity: 0.6;
+    }
+    .seat.booked {
+        background: var(--bg-primary);
+        border-color: rgba(200, 200, 200, 0.4);
+        color: rgba(150, 150, 150, 0.5);
+        cursor: not-allowed;
+    }
+    .seat.booked::after {
+        background: rgba(200, 200, 200, 0.4);
+    }
+    .seat-legend {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+        justify-content: center;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+    .legend-box {
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+        border: 2px solid var(--border);
+    }
+    .legend-box.available { background: var(--bg-secondary); }
+    .legend-box.selected { background: var(--accent); border-color: var(--accent); }
+    .legend-box.booked { background: var(--bg-primary); border-color: rgba(200, 200, 200, 0.4); }
+    
+    .seat-selection-header {
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+    #seats-selected-count {
+        color: var(--accent);
+        font-weight: 700;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="booking-container">
+    <div class="page-header">
+        <h1>Book Your Flight</h1>
+        <p>{{ flight.origin.city }} → {{ flight.destination.city }}</p>
+    </div>
+
+    <!-- Flight Summary -->
+    <div class="booking-summary glass-card">
+        <div class="flight-header">
+            <div class="airline-info">
+                <div class="airline-icon">&#9992;</div>
+                <div>
+                    <div class="airline-name">{{ flight.airline }}</div>
+                    <div class="flight-number">{{ flight.flight_number }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="flight-route">
+            <div class="route-point">
+                <div class="time">{{ flight.departure_time|time:"H:i" }}</div>
+                <div class="code">{{ flight.origin.code }}</div>
+                <div class="city">{{ flight.origin.city }}</div>
+            </div>
+            <div class="route-line">
+                <div class="duration">{{ flight.duration }}</div>
+                <div class="line"></div>
+                <div class="stops">{{ flight.departure_time|date:"d M Y" }}</div>
+            </div>
+            <div class="route-point">
+                <div class="time">{{ flight.arrival_time|time:"H:i" }}</div>
+                <div class="code">{{ flight.destination.code }}</div>
+                <div class="city">{{ flight.destination.city }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Route Map -->
+    <div class="glass-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Flight Route</h3>
+        <div id="route-map" style="height: 320px; border-radius: 12px; overflow: hidden;"></div>
+        {% with stops=flight.get_stops %}
+        {% if stops %}
+        <div style="margin-top: 0.8rem; font-size: 0.85rem; color: var(--text-secondary);">
+            <span style="color: var(--accent-amber); font-weight: 600;">{{ stops|length }} layover{{ stops|length|pluralize }}:</span>
+            {% for stop in stops %}
+                {{ stop.city }} ({{ stop.code }}){% if not forloop.last %}, {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Price Predictor -->
+    <div class="price-predictor glass-card" id="price-predictor">
+        <div class="predictor-header">
+            <h3>Should I Book Now?</h3>
+            <div class="rec-badge" id="rec-badge">
+                <span class="rec-dot" id="rec-dot"></span>
+                <span id="rec-text"></span>
+            </div>
+        </div>
+        <div class="price-chart-container">
+            <canvas id="price-chart"></canvas>
+        </div>
+        <div class="rec-detail" id="rec-detail"></div>
+        <div class="trend-info">
+            <div class="trend-stat">Current: <strong id="current-price"></strong></div>
+            <div class="trend-stat">7-Day Trend: <strong id="trend-pct"></strong></div>
+        </div>
+    </div>
+
+    <!-- Booking Form -->
+    <div class="booking-form-card glass-card">
+        <form method="POST" id="booking-form">
+            {% csrf_token %}
+            {{ form.selected_seats }}
+
+            <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">Select Seat Class</h3>
+
+            <div class="seat-class-options">
+                <div class="seat-option">
+                    <input type="radio" name="seat_class" value="economy" id="seat-economy" checked>
+                    <label for="seat-economy" class="seat-option-label">
+                        <span class="class-name">Economy</span>
+                        <span class="class-price">₹{{ flight.economy_price|floatformat:0 }}</span>
+                        <span class="class-seats">{{ flight.economy_seats_available }} seats available</span>
+                    </label>
+                </div>
+                <div class="seat-option">
+                    <input type="radio" name="seat_class" value="business" id="seat-business">
+                    <label for="seat-business" class="seat-option-label">
+                        <span class="class-name">Business</span>
+                        <span class="class-price">₹{{ flight.business_price|floatformat:0 }}</span>
+                        <span class="class-seats">{{ flight.business_seats_available }} seats available</span>
+                    </label>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">Passenger Details ({{ passengers }} passenger{{ passengers|pluralize }})</h3>
+
+            <div class="passenger-fields">
+                {% for i in "x"|ljust:passengers %}
+                <div class="form-group">
+                    <label for="passenger-name-{{ forloop.counter }}">Passenger {{ forloop.counter }} Full Name</label>
+                    <input type="text" name="passenger_{{ forloop.counter }}" class="form-input" placeholder="Enter passenger {{ forloop.counter }} name" id="passenger-name-{{ forloop.counter }}" required>
+                </div>
+                {% endfor %}
+            </div>
+
+            <h3 style="margin-bottom: 1rem; font-size: 1.1rem; margin-top: 2rem;">Select Your Seats</h3>
+            <div class="seat-selection-header">
+                <p>Please select <span id="seats-required-count">{{ passengers }}</span> seat{{ passengers|pluralize }}. Selected: <span id="seats-selected-count">0</span></p>
+            </div>
+            
+            <div class="seat-map-container" id="seat-map-container">
+                <div class="plane-fuselage" id="plane-fuselage">
+                    <!-- Seats will be generated here by JS -->
+                </div>
+                
+                <div class="seat-legend">
+                    <div class="legend-item"><div class="legend-box available"></div> Available</div>
+                    <div class="legend-item"><div class="legend-box selected"></div> Selected</div>
+                    <div class="legend-item"><div class="legend-box booked"></div> Booked</div>
+                </div>
+            </div>
+
+            {% if form.errors %}
+            <div class="form-errors">
+                {% for field, errors in form.errors.items %}
+                    {% for error in errors %}
+                    <p class="field-error">{{ error }}</p>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <button type="submit" class="btn btn-primary btn-block" id="confirm-booking-btn" style="padding: 14px; font-size: 1.05rem;">
+                Confirm Booking
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+// --- Route Map ---
+(function() {
+    const routeData = {{ route_data|safe }};
+    if (!routeData || routeData.length < 2) return;
+
+    const map = L.map('route-map', {
+        zoomControl: true,
+        scrollWheelZoom: false,
+        attributionControl: false
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+    }).addTo(map);
+
+    const points = [];
+    const colors = { origin: '#c05d3b', destination: '#4a8b5c', stop: '#c9952c' };
+    const sizes = { origin: 9, destination: 9, stop: 6 };
+
+    routeData.forEach(function(pt) {
+        const latlng = [pt.lat, pt.lng];
+        points.push(latlng);
+
+        L.circleMarker(latlng, {
+            radius: sizes[pt.type],
+            fillColor: colors[pt.type],
+            color: colors[pt.type],
+            weight: 2, opacity: 1, fillOpacity: 0.8
+        }).addTo(map);
+
+        const labelClass = 'marker-' + pt.type;
+        const label = pt.type === 'stop'
+            ? pt.code + ' (Layover)'
+            : pt.code + ' - ' + pt.city;
+
+        L.marker(latlng, {
+            icon: L.divIcon({
+                className: '',
+                html: '<div class="map-marker-label ' + labelClass + '">' + label + '</div>',
+                iconSize: [0, 0],
+                iconAnchor: [-12, 10]
+            })
+        }).addTo(map);
+    });
+
+    for (let i = 0; i < points.length - 1; i++) {
+        const segColor = i === 0 ? '#c05d3b' : (i === points.length - 2 ? '#4a8b5c' : '#c9952c');
+        L.polyline([points[i], points[i + 1]], {
+            color: segColor, weight: 3, opacity: 0.8,
+            dashArray: '8, 6', lineCap: 'round'
+        }).addTo(map);
+    }
+
+    map.fitBounds(L.latLngBounds(points), { padding: [50, 50] });
+})();
+
+// --- Price Predictor Chart ---
+(function() {
+    const data = {{ price_prediction|safe }};
+    if (!data) return;
+
+    // Set recommendation badge
+    const badge = document.getElementById('rec-badge');
+    const dot = document.getElementById('rec-dot');
+    const recText = document.getElementById('rec-text');
+    const recDetail = document.getElementById('rec-detail');
+    const currentPrice = document.getElementById('current-price');
+    const trendPct = document.getElementById('trend-pct');
+
+    badge.style.background = data.color + '18';
+    badge.style.color = data.color;
+    badge.style.border = '1px solid ' + data.color + '40';
+    dot.style.background = data.color;
+    recText.textContent = data.recommendation;
+    recDetail.textContent = data.detail;
+    recDetail.style.borderColor = data.color;
+    currentPrice.textContent = '\u20B9' + data.current_price.toLocaleString('en-IN');
+
+    const arrow = data.change_pct > 0 ? '\u2191' : (data.change_pct < 0 ? '\u2193' : '\u2192');
+    const trendColor = data.change_pct > 0 ? '#ef4444' : (data.change_pct < 0 ? '#10b981' : '#f59e0b');
+    trendPct.innerHTML = '<span style="color:' + trendColor + '">' + arrow + ' ' + Math.abs(data.change_pct) + '%</span>';
+
+    // Build chart
+    const labels = data.history.map(h => h.date);
+    const prices = data.history.map(h => h.price);
+
+    const ctx = document.getElementById('price-chart').getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+    gradient.addColorStop(0, data.color + '30');
+    gradient.addColorStop(1, data.color + '05');
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Economy Price',
+                data: prices,
+                borderColor: data.color,
+                backgroundColor: gradient,
+                borderWidth: 2.5,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: data.color,
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 7
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#ffffff',
+                    titleColor: '#5a6478',
+                    bodyColor: '#1a2744',
+                    borderColor: '#e5e1d9',
+                    borderWidth: 1,
+                    padding: 10,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(ctx) {
+                            return '\u20B9' + ctx.parsed.y.toLocaleString('en-IN');
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: '#ebe7df', drawBorder: false },
+                    ticks: { color: '#8d95a3', font: { size: 11, family: 'DM Sans' } }
+                },
+                y: {
+                    grid: { color: '#ebe7df', drawBorder: false },
+                    ticks: {
+                        color: '#8d95a3',
+                        font: { size: 11, family: 'DM Sans' },
+                        callback: function(v) { return '\u20B9' + v.toLocaleString('en-IN'); }
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+})();
+
+// --- Seat Map Logic ---
+(function() {
+    const bookedEconomy = {{ booked_economy_seats|safe|default:"[]" }};
+    const bookedBusiness = {{ booked_business_seats|safe|default:"[]" }};
+    const requiredSeats = {{ passengers }};
+    let currentClass = document.querySelector('input[name="seat_class"]:checked').value;
+    let selectedSeats = [];
+    
+    const fuselage = document.getElementById('plane-fuselage');
+    const selectedInput = document.getElementById('selected_seats');
+    const selectedCountSpan = document.getElementById('seats-selected-count');
+    const radioButtons = document.querySelectorAll('input[name="seat_class"]');
+    
+    // Config
+    const businessRows = 5;
+    const businessCols = ['A', 'B', 'J', 'K']; // 2-2
+    const economyRows = 25; // Rows 6 to 30
+    const economyCols = ['A', 'B', 'C', 'E', 'F', 'G']; // 3-3
+    
+    function generateSeatMap() {
+        fuselage.innerHTML = '';
+        selectedSeats = [];
+        updateSelectedUI();
+        
+        if (currentClass === 'business') {
+            for (let r = 1; r <= businessRows; r++) {
+                let rowDiv = document.createElement('div');
+                rowDiv.className = 'seat-row';
+                rowDiv.setAttribute('data-class', 'business');
+                
+                businessCols.forEach((col, idx) => {
+                    let seatId = r + col;
+                    let seatDiv = createSeatData(seatId, bookedBusiness.includes(seatId));
+                    rowDiv.appendChild(seatDiv);
+                    
+                    if (idx === 1) { // Aisle
+                        let aisle = document.createElement('div');
+                        aisle.className = 'aisle';
+                        aisle.textContent = r;
+                        rowDiv.appendChild(aisle);
+                    }
+                });
+                fuselage.appendChild(rowDiv);
+            }
+        } else {
+            for (let r = 6; r <= 6 + economyRows - 1; r++) {
+                let rowDiv = document.createElement('div');
+                rowDiv.className = 'seat-row';
+                rowDiv.setAttribute('data-class', 'economy');
+                
+                economyCols.forEach((col, idx) => {
+                    let seatId = r + col;
+                    let seatDiv = createSeatData(seatId, bookedEconomy.includes(seatId));
+                    rowDiv.appendChild(seatDiv);
+                    
+                    if (idx === 2) { // Aisle
+                        let aisle = document.createElement('div');
+                        aisle.className = 'aisle';
+                        aisle.textContent = r;
+                        rowDiv.appendChild(aisle);
+                    }
+                });
+                fuselage.appendChild(rowDiv);
+            }
+        }
+    }
+    
+    function createSeatData(id, isBooked) {
+        let div = document.createElement('div');
+        div.className = 'seat';
+        if (isBooked) {
+            div.classList.add('booked');
+        } else {
+            div.addEventListener('click', () => toggleSeat(id, div));
+        }
+        div.textContent = id;
+        return div;
+    }
+    
+    function toggleSeat(id, element) {
+        const idx = selectedSeats.indexOf(id);
+        if (idx !== -1) {
+            selectedSeats.splice(idx, 1);
+            element.classList.remove('selected');
+        } else {
+            if (selectedSeats.length < requiredSeats) {
+                selectedSeats.push(id);
+                element.classList.add('selected');
+            } else {
+                selectedCountSpan.style.color = '#e74c3c';
+                setTimeout(() => selectedCountSpan.style.color = 'var(--accent)', 300);
+            }
+        }
+        updateSelectedUI();
+    }
+    
+    function updateSelectedUI() {
+        selectedCountSpan.textContent = selectedSeats.length;
+        selectedInput.value = JSON.stringify(selectedSeats);
+    }
+    
+    radioButtons.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            currentClass = e.target.value;
+            generateSeatMap();
+        });
+    });
+    
+    // Validate on submit
+    document.getElementById('booking-form').addEventListener('submit', function(e) {
+        if (selectedSeats.length !== requiredSeats) {
+            e.preventDefault();
+            alert('Please select exactly ' + requiredSeats + ' seat(s).');
+        }
+    });
+    
+    generateSeatMap();
+})();
+</script>
+{% endblock %}
